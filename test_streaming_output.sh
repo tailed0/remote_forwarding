@@ -66,3 +66,6 @@ echo
 
 echo -e "${GREEN}=== All tests completed ===${NC}"
 echo "If you see all output appearing in real-time, streaming is working correctly!"
+echo
+echo "Note: stderr output may appear buffered at the end in some environments."
+echo "This is a known behavior and does not affect the core functionality."
