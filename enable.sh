@@ -18,17 +18,27 @@ readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly NC='\033[0m' # No Color
 
-# Logging functions
+# Ensure unbuffered output for streaming
+export PYTHONUNBUFFERED=1
+stty -F /dev/stdout 2>/dev/null || true
+
+# Logging functions with explicit flushing
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $*"
+    # Force flush stdout
+    exec 1>&1
 }
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $*" >&2
+    # Force flush stderr
+    exec 2>&2
 }
 
 log_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $*"
+    # Force flush stdout
+    exec 1>&1
 }
 
 # Display usage information
@@ -177,8 +187,15 @@ check_service_exists "$SERVICE_NAME"
 # Install dependencies
 install_autossh
 
-# Test SSH connection
+# Test SSH connection with progress indicator
 log_info "Testing SSH connection to ${TARGET_HOST}..."
+echo -n "  Connecting"
+for i in {1..3}; do
+    echo -n "."
+    sleep 0.5
+done
+echo  # New line after dots
+
 if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$TARGET_HOST" exit 2>/dev/null; then
     log_error "Cannot connect to ${TARGET_HOST}. Please ensure:"
     log_error "  1. SSH key authentication is configured"
@@ -235,23 +252,37 @@ fi
 # Reload systemd and enable service
 log_info "Enabling and starting service..."
 
+echo -n "  Reloading systemd"
 if ! sudo systemctl daemon-reload; then
+    echo " [FAILED]"
     log_error "Failed to reload systemd"
     exit 1
 fi
+echo " [OK]"
 
-if ! sudo systemctl enable "$SERVICE_NAME"; then
+echo -n "  Enabling service"
+if ! sudo systemctl enable "$SERVICE_NAME" >/dev/null 2>&1; then
+    echo " [FAILED]"
     log_error "Failed to enable service"
     exit 1
 fi
+echo " [OK]"
 
+echo -n "  Starting service"
 if ! sudo systemctl restart "$SERVICE_NAME"; then
+    echo " [FAILED]"
     log_error "Failed to start service"
     exit 1
 fi
+echo " [OK]"
 
-# Wait a moment for service to stabilize
-sleep 2
+# Wait a moment for service to stabilize with progress
+echo -n "  Waiting for service to stabilize"
+for i in {1..4}; do
+    echo -n "."
+    sleep 0.5
+done
+echo " [OK]"
 
 # Check service status
 if systemctl is-active --quiet "$SERVICE_NAME"; then
