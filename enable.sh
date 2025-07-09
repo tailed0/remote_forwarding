@@ -5,6 +5,30 @@ cd $(dirname $0)
 set -eu
 set -o pipefail
 
+# Enable unbuffered output for streaming in web interfaces
+stty -icanon -echo 2>/dev/null || true
+
+# Logging functions with explicit flushing for streaming output
+log_info() {
+    echo "[INFO] $1" >&1
+    exec 1>&1  # Flush stdout
+}
+
+log_error() {
+    echo "[ERROR] $1" >&2
+    exec 2>&2  # Flush stderr
+}
+
+log_progress() {
+    echo -n "$1" >&1
+    exec 1>&1  # Flush stdout
+}
+
+log_progress_done() {
+    echo " ✓" >&1
+    exec 1>&1  # Flush stdout
+}
+
 # ヘルプメッセージ
 usage() {
     echo "Usage: $0 -p <remote_port> [-t <target_host>] [-l <local_port>] [-s <service_name>]"
