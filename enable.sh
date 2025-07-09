@@ -37,7 +37,7 @@ done
 
 # 必須引数チェック
 if [[ -z "${REMOTE_PORT:-}" ]]; then
-    echo "Error: -p is required."
+    log_error "-p is required."
     usage
 fi
 
@@ -49,12 +49,21 @@ else
 fi
 
 # autosshがなければインストール
-which autossh >/dev/null || sudo apt -y install autossh
+log_progress "Checking for autossh..."
+if which autossh >/dev/null 2>&1; then
+    log_progress_done
+else
+    echo ""
+    log_info "Installing autossh..."
+    sudo apt -y install autossh
+    log_info "autossh installation completed"
+fi
 
 # systemdサービスファイルの動的生成
 SERVICE_FILE=/etc/systemd/system/$SERVICE_NAME.service
 
-cat <<EOL | sudo tee $SERVICE_FILE
+log_progress "Creating systemd service file..."
+cat <<EOL | sudo tee $SERVICE_FILE >/dev/null
 [Unit]
 Description = Remote forwarding service for $SERVICE_NAME (${TARGET_HOST}:${REMOTE_PORT} <- localhost:${LOCAL_PORT})
 
@@ -71,13 +80,40 @@ Group = $(whoami)
 [Install]
 WantedBy = multi-user.target
 EOL
+log_progress_done
 
-# systemdでサービスを有効化して開始
-sudo systemctl enable $SERVICE_NAME
+log_progress "Testing SSH connection to $TARGET_HOST..."
+if timeout 10 ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no $TARGET_HOST exit 2>/dev/null; then
+    log_progress_done
+else
+    echo ""
+    log_error "SSH connection test failed. Please check your SSH configuration."
+    log_info "Make sure you can connect to $TARGET_HOST with SSH key authentication."
+    exit 1
+fi
+
+log_progress "Enabling systemd service..."
+sudo systemctl enable $SERVICE_NAME >/dev/null 2>&1
+log_progress_done
+
+log_progress "Starting systemd service..."
 sudo systemctl restart $SERVICE_NAME
+log_progress_done
 
-echo "Service $SERVICE_NAME has been created and started:"
-echo "  Target host: $TARGET_HOST"
-echo "  Remote port: $REMOTE_PORT (on $TARGET_HOST)"
-echo "  Local port: $LOCAL_PORT"
+# Wait a moment for service to start
+sleep 2
+
+log_progress "Checking service status..."
+if sudo systemctl is-active --quiet $SERVICE_NAME; then
+    log_progress_done
+    log_info "Service $SERVICE_NAME has been created and started successfully:"
+    log_info "  Target host: $TARGET_HOST"
+    log_info "  Remote port: $REMOTE_PORT (on $TARGET_HOST)"
+    log_info "  Local port: $LOCAL_PORT"
+else
+    echo ""
+    log_error "Service failed to start. Checking logs..."
+    sudo journalctl -u $SERVICE_NAME --no-pager --lines=10
+    exit 1
+fi
 
