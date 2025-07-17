@@ -1,1 +1,8 @@
-Hello, World!
+Issue #18: Test placeholder replacement
+
+Issue Description:
+This is a test issue to see if the placeholder replacement works correctly.
+
+Issue URL: https://github.com/shspkt/remote_forwarding/issues/18
+
+Starting Branch: test-placeholder-replacement-18
